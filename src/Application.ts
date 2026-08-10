@@ -1,31 +1,39 @@
+import { Musket, Application as MusketApp } from '@h3ravel/musket'
 import { browser, endBrowserSession, getBrowserSession, startBrowserSession } from './Manager'
 import { createDefaultConfig, mergeConfig } from './config'
+import { extractReadmeOperationFromHtml, extractReadmeOperationFromHtmlAsync } from './ReadmeExtractor'
 
 import { Logger } from '@h3ravel/shared'
 import { UserConfig } from './types/app'
-import { extractReadmeOperationFromHtml, extractReadmeOperationFromHtmlAsync } from './ReadmeExtractor'
 import path from 'node:path'
 import { readFile } from 'node:fs/promises'
 import { resolveReadmeSidebarUrls } from './ReadmeCrawler'
 
-export class Application {
+export class Application extends MusketApp {
     private config: UserConfig
 
     constructor(config: Partial<UserConfig> = {}) {
+        super()
         this.config = mergeConfig(createDefaultConfig(), config)
     }
 
-    getConfig (config: Partial<UserConfig> = {}): UserConfig {
+    registerMusketListeners(musket: Musket<this>) {
+        musket.afterHandle.on(() => {
+            process.exit(0)
+        })
+    }
+
+    getConfig(config: Partial<UserConfig> = {}): UserConfig {
         return { ...this.config, ...config }
     }
 
-    configure (config: Partial<UserConfig>): UserConfig {
+    configure(config: Partial<UserConfig>): UserConfig {
         this.config = mergeConfig(this.config, config)
 
         return this.config
     }
 
-    async crawlReadmeOperations (
+    async crawlReadmeOperations(
         source: string,
         rootOperation: ReturnType<typeof extractReadmeOperationFromHtml>,
         baseUrl: string | null
@@ -82,7 +90,7 @@ export class Application {
         }
     }
 
-    private async mapWithConcurrency<T, TResult> (
+    private async mapWithConcurrency<T, TResult>(
         values: T[],
         mapper: (value: T) => Promise<TResult>
     ): Promise<TResult[]> {
@@ -108,7 +116,7 @@ export class Application {
         return results
     }
 
-    attachSourceUrl (
+    attachSourceUrl(
         sourceUrl: string,
         operation: ReturnType<typeof extractReadmeOperationFromHtml>
     ) {
@@ -118,7 +126,7 @@ export class Application {
         }
     }
 
-    resolveCrawlBaseUrl (source: string, baseUrl: string | null): string | null {
+    resolveCrawlBaseUrl(source: string, baseUrl: string | null): string | null {
         if (baseUrl) {
             return new URL(baseUrl).toString()
         }
@@ -130,7 +138,7 @@ export class Application {
         return null
     }
 
-    async loadHtmlSource (source: string, initial?: boolean): Promise<string> {
+    async loadHtmlSource(source: string, initial?: boolean): Promise<string> {
         if (!source) {
             throw new Error('A source path or URL is required')
         }
