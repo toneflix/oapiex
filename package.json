@@ -1,7 +1,7 @@
 {
     "name": "oapiex",
     "type": "module",
-    "version": "0.3.11",
+    "version": "0.3.12",
     "description": "CLI and TypeScript toolkit for turning documentation pages into usable developer artifacts.",
     "main": "./dist/index.cjs",
     "private": false,
