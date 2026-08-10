@@ -63,7 +63,7 @@ const normalizeRuntimeArguments = (
     const pathParams = operation.pathParams.length > 0 ? toRecord(args[cursor++]) : {}
     const queryParams = operation.queryParams.length > 0 ? toRecord(args[cursor++]) : {}
     const body = operation.hasBody ? args[cursor++] : undefined
-    const headers = operation.headerParams.length > 0 ? toRecord(args[cursor++]) : {}
+    const headers = operation.headerParams.length > 0 ? toRecord(args[cursor]) : {}
 
     return [pathParams, queryParams, body, headers]
 }

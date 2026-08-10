@@ -3,8 +3,8 @@ import './utilities/global'
 import { Environment } from './Contracts/Core'
 import { XGenericObject } from './Contracts/Interfaces'
 import { buildUrl } from './utilities/helpers'
-import { getConfig } from './utilities/Manager'
 import crypto from 'crypto'
+import { getConfig } from './utilities/Manager'
 
 export class Builder {
     private static baseUrls = {
@@ -24,7 +24,7 @@ export class Builder {
      * 
      * @param env
      */
-    static setEnvironment (env: Environment) {
+    static setEnvironment(env: Environment) {
         this.environment = env
     }
 
@@ -33,7 +33,7 @@ export class Builder {
      * 
      * @returns 
      */
-    static baseUrl () {
+    static baseUrl() {
         const config = getConfig()
         const env = this.environment
             ?? config.environment
@@ -54,7 +54,7 @@ export class Builder {
      * @param endpoint 
      * @returns 
      */
-    static buildUrl (...endpoint: string[]) {
+    static buildUrl(...endpoint: string[]) {
         return buildUrl(this.baseUrl(), ...endpoint)
     }
 
@@ -65,11 +65,9 @@ export class Builder {
      * @param type 
      * @returns 
      */
-    static buildParams (params: XGenericObject, type: 'query' | 'path' = 'path') {
-        let built = ''
-
+    static buildParams(params: XGenericObject, type: 'query' | 'path' = 'path') {
         if (type === 'path') {
-            built = Object.values(params).join('/')
+            return Object.values(params).join('/')
         } else {
             const queryParams: string[] = []
 
@@ -77,10 +75,8 @@ export class Builder {
                 queryParams.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
             }
 
-            built = queryParams.join('&')
+            return queryParams.join('&')
         }
-
-        return built
     }
 
     /**
@@ -92,7 +88,7 @@ export class Builder {
      * 
      * @returns 
      */
-    static assignParamsToUrl (
+    static assignParamsToUrl(
         url: string,
         params: XGenericObject,
         type: 'query' | 'path' = 'path'
@@ -125,7 +121,7 @@ export class Builder {
      * @param queryParams 
      * @returns 
      */
-    static buildTargetUrl (
+    static buildTargetUrl(
         path: string,
         params: XGenericObject = {},
         queryParams: XGenericObject = {}
@@ -148,7 +144,7 @@ export class Builder {
      * @param outputMapping     A mapping of input keys to output keys for the encrypted values.
      * @returns                 A new object with the specified keys encrypted.
      */
-    static async encryptDetails<X extends XGenericObject> (
+    static async encryptDetails<X extends XGenericObject>(
         input: Partial<X>,
         keysToEncrypt: (keyof X)[] = [],
         outputMapping: Partial<Record<keyof X, string>> = {}
@@ -190,7 +186,7 @@ export class Builder {
      * @param nonce 
      * @returns 
      */
-    static async encryptAES (data: string, token: string, nonce: string): Promise<string> {
+    static async encryptAES(data: string, token: string, nonce: string): Promise<string> {
         if (nonce.length !== 12) {
             throw new Error('Nonce must be exactly 12 characters long')
         }

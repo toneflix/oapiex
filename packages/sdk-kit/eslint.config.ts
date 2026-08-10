@@ -12,7 +12,7 @@ export default defineConfig(
                 process: 'readonly',
             },
             parserOptions: {
-                tsconfigRootDir: process.cwd(),
+                tsconfigRootDir: import.meta.dirname,
                 project: './tsconfig.json',
                 ecmaVersion: 'latest',
                 sourceType: 'module',

@@ -23,10 +23,10 @@
   },
   "include": [
     "./**/*.d.ts",
-    "./github/**/*",
     "./test/**/*",
-    "./tests/**/*",
-    "./src/**/*"
+    "./tests",
+    "./src",
+    "./tsdown.config.*"
   ],
   "exclude": [
     "./build",
