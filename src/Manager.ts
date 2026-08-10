@@ -159,21 +159,6 @@ const endBrowserSession = async (): Promise<void> => {
     removeTerminationHandlersWhenIdle()
 }
 
-const registerDeferredCloser = (
-    browserName: BrowserName,
-    closer: () => Promise<void> | void
-): boolean => {
-    const activeSession = getBrowserSession()
-
-    if (!activeSession || activeSession.browser !== browserName) {
-        return false
-    }
-
-    activeSession.closers.push(closer)
-
-    return true
-}
-
 const updateConfig = (config: Partial<UserConfig>): UserConfig => {
     const userConfig = mergeConfig(globalConfig, config)
 
@@ -231,9 +216,7 @@ const browser = async (
                 throw new Error(`Unable to extract HTML from remote source: ${source}`)
             }
 
-            if (!registerDeferredCloser('happy-dom', () => window.happyDOM.close())) {
-                await window.happyDOM.close()
-            }
+            await window.happyDOM.close()
 
             return html
         } finally {
@@ -258,14 +241,8 @@ const browser = async (
                 throw new Error(`Unable to extract HTML from remote source: ${source}`)
             }
 
-            const currentWindow = window
-
-            if (!registerDeferredCloser('jsdom', () => currentWindow.close())) {
-                window.close()
-                window = undefined
-            } else {
-                window = undefined
-            }
+            window.close()
+            window = undefined
 
             return html
         } finally {

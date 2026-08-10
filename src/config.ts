@@ -8,6 +8,7 @@ export const defaultConfig: UserConfig = {
     userAgent: 'Mozilla/5.0 (X11; Linux x64) AppleWebKit/537.36 (KHTML, like Gecko) OpenApiExtractor/1.0.0',
     retryCount: 3,
     retryDelay: 1000,
+    crawlConcurrency: 4,
     browser: 'puppeteer',
     happyDom: {
         enableJavaScriptEvaluation: true,

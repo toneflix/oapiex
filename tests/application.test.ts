@@ -127,4 +127,39 @@ describe('Application', () => {
         mockedRemoteHtml.clear()
         mockedAxios.mockReset()
     })
+
+    it('bounds concurrent page loads while preserving crawl order', async () => {
+        const rootSource = 'https://docs.example.com/reference/root'
+        const html = await readFile(new URL('./fixtures/readme-text-response-example.html', import.meta.url), 'utf8')
+        const rootOperation = extractReadmeOperationFromHtml(html)
+        const urls = Array.from({ length: 6 }, (_, index) => `${rootSource}/${index}`)
+        rootOperation.sidebarLinks = urls.map((href, index) => ({
+            section: null,
+            href,
+            label: `Operation ${index}`,
+            method: null,
+            active: false,
+            subpage: false,
+        }))
+
+        let activeLoads = 0
+        let peakLoads = 0
+        const mockedAxios = vi.mocked(axios.get)
+        mockedAxios.mockImplementation(async () => {
+            activeLoads += 1
+            peakLoads = Math.max(peakLoads, activeLoads)
+            await new Promise((resolve) => setTimeout(resolve, 5))
+            activeLoads -= 1
+
+            return { data: html }
+        })
+
+        const app = new Application({ browser: 'axios', crawlConcurrency: 2 })
+        const result = await app.crawlReadmeOperations(rootSource, rootOperation, null)
+
+        expect(peakLoads).toBe(2)
+        expect(result.operations.slice(1).map((operation) => operation.sourceUrl)).toEqual(urls)
+
+        mockedAxios.mockReset()
+    })
 })

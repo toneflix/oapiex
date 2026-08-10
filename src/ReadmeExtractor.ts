@@ -9,8 +9,28 @@ import { isRecord } from './Core'
 export const extractReadmeOperationFromHtml = (html: string): ReadmeOperation => {
     const window = new Window()
 
-    window.document.write(html)
+    try {
+        window.document.write(html)
 
+        return extractReadmeOperationFromWindow(window)
+    } finally {
+        void window.happyDOM.close()
+    }
+}
+
+export const extractReadmeOperationFromHtmlAsync = async (html: string): Promise<ReadmeOperation> => {
+    const window = new Window()
+
+    try {
+        window.document.write(html)
+
+        return extractReadmeOperationFromWindow(window)
+    } finally {
+        await window.happyDOM.close()
+    }
+}
+
+const extractReadmeOperationFromWindow = (window: Window): ReadmeOperation => {
     const { document } = window
     const contentRoot = document.querySelector('article#content') ?? document.body
     const requestParamsForm = contentRoot.querySelector('form[name="Parameters"]')

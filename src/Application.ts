@@ -3,7 +3,7 @@ import { createDefaultConfig, mergeConfig } from './config'
 
 import { Logger } from '@h3ravel/shared'
 import { UserConfig } from './types/app'
-import { extractReadmeOperationFromHtml } from './ReadmeExtractor'
+import { extractReadmeOperationFromHtml, extractReadmeOperationFromHtmlAsync } from './ReadmeExtractor'
 import path from 'node:path'
 import { readFile } from 'node:fs/promises'
 import { resolveReadmeSidebarUrls } from './ReadmeCrawler'
@@ -52,10 +52,10 @@ export class Application {
             const rootEntry = this.attachSourceUrl(rootSourceUrl, rootOperation)
             const urlsToFetch = discoveredUrls.filter((url) => url !== rootSourceUrl)
 
-            const crawledOperations = await Promise.all(urlsToFetch.map(async (url) => {
+            const crawledOperations = await this.mapWithConcurrency(urlsToFetch, async (url) => {
                 const start = Date.now()
                 const html = await this.loadHtmlSource(url)
-                const operation = extractReadmeOperationFromHtml(html)
+                const operation = await extractReadmeOperationFromHtmlAsync(html)
                 const end = Date.now() - start
 
                 if (!operation.method) {
@@ -68,7 +68,7 @@ export class Application {
                 )
 
                 return this.attachSourceUrl(url, operation)
-            }))
+            })
 
             return {
                 rootSource: rootSourceUrl,
@@ -80,6 +80,32 @@ export class Application {
                 await endBrowserSession()
             }
         }
+    }
+
+    private async mapWithConcurrency<T, TResult> (
+        values: T[],
+        mapper: (value: T) => Promise<TResult>
+    ): Promise<TResult[]> {
+        const configuredConcurrency = Number.isFinite(this.config.crawlConcurrency)
+            ? this.config.crawlConcurrency
+            : 1
+        const concurrency = Math.max(1, Math.floor(configuredConcurrency))
+        const results = new Array<TResult>(values.length)
+        let nextIndex = 0
+
+        const worker = async () => {
+            while (nextIndex < values.length) {
+                const index = nextIndex
+                nextIndex += 1
+                results[index] = await mapper(values[index])
+            }
+        }
+
+        await Promise.all(
+            Array.from({ length: Math.min(concurrency, values.length) }, () => worker())
+        )
+
+        return results
     }
 
     attachSourceUrl (

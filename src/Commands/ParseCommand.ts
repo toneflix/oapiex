@@ -5,7 +5,7 @@ import { Command } from '@h3ravel/musket'
 import { Logger } from '@h3ravel/shared'
 import { OutputGenerator } from '../generator/OutputGenerator'
 import { UserConfig } from 'src/types/app'
-import { extractReadmeOperationFromHtml } from '../ReadmeExtractor'
+import { extractReadmeOperationFromHtml, extractReadmeOperationFromHtmlAsync } from '../ReadmeExtractor'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { transformer } from '../OpenApiTransform'
@@ -52,7 +52,7 @@ export class ParseCommand extends Command<Application> {
             }
 
             const html = await this.app.loadHtmlSource(source, true)
-            const operation = extractReadmeOperationFromHtml(html)
+            const operation = await extractReadmeOperationFromHtmlAsync(html)
             const payload = crawl
                 ? await this.app.crawlReadmeOperations(source, operation, baseUrl)
                 : operation

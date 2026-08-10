@@ -81,6 +81,7 @@ export interface UserConfig {
     userAgent: string
     retryCount: number
     retryDelay: number
+    crawlConcurrency: number
     happyDom: IOptionalBrowserSettings
     browser: BrowserName
     puppeteer?: {

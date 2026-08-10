@@ -8,7 +8,7 @@ import type { OpenApiDocumentLike } from '../types/open-api'
 import { OutputGenerator } from '../generator/OutputGenerator'
 import { SdkPackageGenerator } from '../generator/SdkPackageGenerator'
 import { TypeScriptGenerator } from '../generator/TypeScriptGenerator'
-import { extractReadmeOperationFromHtml } from '../ReadmeExtractor'
+import { extractReadmeOperationFromHtml, extractReadmeOperationFromHtmlAsync } from '../ReadmeExtractor'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -142,7 +142,7 @@ export class GenerateCommand extends Command<Application> {
         }
 
         const html = await this.app.loadHtmlSource(options.source, true)
-        const operation = extractReadmeOperationFromHtml(html)
+        const operation = await extractReadmeOperationFromHtmlAsync(html)
         const payload = options.crawl
             ? await this.app.crawlReadmeOperations(options.source, operation, options.baseUrl)
             : operation
