@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { Http } from '@oapiex/sdk-kit'
 import { createClient } from '../src/index'
 
 describe('example-runtime-sdk runtime client', () => {
@@ -15,7 +14,7 @@ describe('example-runtime-sdk runtime client', () => {
             environment: 'sandbox',
         })
         const validator = vi.fn(async () => true)
-        const sendSpy = vi.spyOn(Http, 'send')
+        const sendSpy = vi.spyOn(sdk.http, 'send')
 
         sdk.setAccessValidator(validator)
 

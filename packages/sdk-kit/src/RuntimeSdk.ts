@@ -2,7 +2,6 @@ import { InferRuntimeSdkApi, RuntimeSdkBundle, RuntimeSdkManifest, RuntimeSdkOpe
 
 import { BaseApi } from './Apis/BaseApi'
 import { Core } from './Core'
-import { Http } from './Http'
 import type { InitOptions } from './Contracts/Core'
 
 export const createRuntimeApi = <TBundle extends { manifest: RuntimeSdkManifest }> (
@@ -28,7 +27,7 @@ export const createRuntimeApi = <TBundle extends { manifest: RuntimeSdkManifest 
                     throw new Error(`Missing required request body for ${operation.method} ${operation.path}`)
                 }
 
-                const { data } = await Http.send(
+                const { data } = await core.http.send(
                     core.builder.buildTargetUrl(operation.path, pathParams, queryParams),
                     operation.method,
                     body ?? {},

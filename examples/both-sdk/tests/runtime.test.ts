@@ -64,7 +64,7 @@ describe('example-both-sdk runtime client', () => {
             environment: 'sandbox',
         })
         const validator = vi.fn(async () => true)
-        const sendSpy = vi.spyOn(Http, 'send')
+        const sendSpy = vi.spyOn(sdk.http, 'send')
 
         sdk.setAccessValidator(validator)
 

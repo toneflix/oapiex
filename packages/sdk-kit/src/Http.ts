@@ -4,11 +4,40 @@ import axios, { RawAxiosRequestHeaders } from 'axios'
 
 import { BaseApi } from './Apis/BaseApi'
 import { Builder } from './Builder'
-import { AuthConfig, AuthRequestConfig, HttpMethod, UnifiedResponse } from './Contracts/Core'
+import { AuthConfig, AuthRequestConfig, HttpMethod, UnifiedResponse, UserConfig } from './Contracts/Core'
 import { HttpException } from './Exceptions/HttpException'
 import { XGenericObject } from './Contracts/Interfaces'
 import { getConfig, updateConfig } from './utilities/Manager'
 import { Logger } from './utilities/Log'
+
+/**
+ * Who a request belongs to: the config it is sent with, and the API that
+ * records its last exception. Requests without a scope use the process-wide
+ * config, exactly as before.
+ */
+export interface HttpScope {
+    config: () => UserConfig
+    api?: () => BaseApi | undefined
+}
+
+/**
+ * An HTTP client bound to one `Core`'s config. Every `Core` exposes one as
+ * `core.http`; it mirrors the static `Http.send` / `Http.get`.
+ */
+export interface ScopedHttp {
+    send<R = any, M extends XGenericObject = XGenericObject> (
+        url: string,
+        method: HttpMethod,
+        body?: any,
+        headers?: RawAxiosRequestHeaders,
+        params?: XGenericObject,
+    ): Promise<UnifiedResponse<R, M>>
+    get<R = any, M extends XGenericObject = XGenericObject> (
+        url: string,
+        params?: XGenericObject,
+        headers?: RawAxiosRequestHeaders,
+    ): Promise<UnifiedResponse<R, M>>
+}
 
 export class Http {
     /**
@@ -34,7 +63,24 @@ export class Http {
     constructor(
         private headers: RawAxiosRequestHeaders = {},
         private body?: any,
+        private scopedConfig?: UserConfig,
     ) { }
+
+    /**
+     * Create an HTTP client bound to a config, so requests carry that config's
+     * auth, headers, timeout, base URL and debug level instead of the
+     * process-wide ones.
+     *
+     * @param scope
+     */
+    static scoped (scope: HttpScope): ScopedHttp {
+        return {
+            send: (url, method, body, headers = {}, params) =>
+                Http.dispatch(scope, url, method, body, headers, params),
+            get: (url, params, headers = {}) =>
+                Http.dispatch(scope, url, 'GET', undefined, headers, params),
+        }
+    }
 
     /**
      * Set the debug level
@@ -101,8 +147,12 @@ export class Http {
         updateConfig({ auth: undefined })
     }
 
+    private config (): UserConfig {
+        return this.scopedConfig ?? getConfig()
+    }
+
     setDefaultHeaders (defaults: Record<string, string>) {
-        const config = getConfig()
+        const config = this.config()
 
         this.headers = {
             ...defaults,
@@ -120,7 +170,8 @@ export class Http {
     }
 
     axiosApi () {
-        const config = getConfig()
+        const config = this.config()
+        const debugLevel = this.scopedConfig ? (this.scopedConfig.debugLevel ?? 0) : Http.debugLevel
 
         this.setDefaultHeaders({
             'Accept': 'application/json',
@@ -128,18 +179,18 @@ export class Http {
         })
 
         const instance = axios.create({
-            baseURL: Builder.baseUrl(),
+            baseURL: this.scopedConfig ? Builder.resolveBaseUrl(this.scopedConfig) : Builder.baseUrl(),
             headers: this.getHeaders(),
             timeout: config.timeout,
         })
 
-        if (Http.debugLevel > 0) {
+        if (debugLevel > 0) {
             instance.interceptors.request.use(request => {
                 Logger.run('Starting Request:', {
                     url: request.url,
                     method: request.method,
                     // Remove auth token from logs for security
-                    headers: Http.debugLevel < 3 ? Object.fromEntries(
+                    headers: debugLevel < 3 ? Object.fromEntries(
                         Object.entries(request.headers || {}).filter(([key]) => key.toLowerCase() !== 'authorization')
                     ) : request.headers,
                     params: request.params,
@@ -157,7 +208,7 @@ export class Http {
                 Logger.run('Response:', {
                     status: response.status,
                     // Remove auth token from logs for security
-                    data: Http.debugLevel < 3 ? Object.fromEntries(
+                    data: debugLevel < 3 ? Object.fromEntries(
                         Object.entries(response.data || {}).filter(([key]) => key.toLowerCase() !== 'access_token')
                     ) : response.data,
                 })
@@ -210,6 +261,19 @@ export class Http {
         headers: RawAxiosRequestHeaders = {},
         params?: XGenericObject,
     ): Promise<UnifiedResponse<R, M>> {
+        return this.dispatch<R, M>(undefined, url, method, body, headers, params)
+    }
+
+    private static async dispatch<R = any, M extends XGenericObject = XGenericObject> (
+        scope: HttpScope | undefined,
+        url: string,
+        method: HttpMethod,
+        body?: any,
+        headers: RawAxiosRequestHeaders = {},
+        params?: XGenericObject,
+    ): Promise<UnifiedResponse<R, M>> {
+        const config = scope?.config()
+
         try {
             const request = await this.prepareRequest({
                 url,
@@ -217,8 +281,8 @@ export class Http {
                 body,
                 headers: this.toHeaderRecord(headers),
                 params: { ...(params ?? {}) },
-            })
-            const { data } = await new Http(request.headers, request.body).axiosApi()<UnifiedResponse<R & M>>({
+            }, config)
+            const { data } = await new Http(request.headers, request.body, config).axiosApi()<UnifiedResponse<R & M>>({
                 url: request.url,
                 method: request.method,
                 data: request.body,
@@ -234,32 +298,33 @@ export class Http {
         } catch (e: any) {
             const error = (e.response?.data ?? {})
 
-            throw this.exception(e.response?.status ?? 500, error || e, e)
+            throw this.exception(e.response?.status ?? 500, error || e, e, scope?.api?.())
         }
     }
 
-    private static async prepareRequest (request: AuthRequestConfig): Promise<AuthRequestConfig> {
+    private static async prepareRequest (request: AuthRequestConfig, config?: UserConfig): Promise<AuthRequestConfig> {
         let prepared: AuthRequestConfig = {
             ...request,
             headers: { ...request.headers },
             params: { ...(request.params ?? {}) },
         }
 
-        for (const auth of this.getConfiguredAuth()) {
+        for (const auth of this.getConfiguredAuth(config)) {
             prepared = await this.applyAuth(prepared, auth)
         }
 
         return prepared
     }
 
-    private static getConfiguredAuth (): AuthConfig[] {
-        const configuredAuth = getConfig().auth
+    private static getConfiguredAuth (config?: UserConfig): AuthConfig[] {
+        const configuredAuth = (config ?? getConfig()).auth
 
         if (configuredAuth) {
             return Array.isArray(configuredAuth) ? configuredAuth : [configuredAuth]
         }
 
-        if (this.bearerToken) {
+        // The static bearer token belongs to the process-wide config only.
+        if (!config && this.bearerToken) {
             return [{
                 type: 'bearer',
                 token: this.bearerToken,
@@ -374,7 +439,7 @@ export class Http {
      * @param error 
      * @returns 
      */
-    private static exception (status: number, error: XGenericObject, originalError: Error): Error {
+    private static exception (status: number, error: XGenericObject, originalError: Error, api?: BaseApi): Error {
         const exception = HttpException.fromCode(status, {
             success: false,
             message: `Request failed: ${error.error?.message || 'An error occurred'}`,
@@ -389,8 +454,10 @@ export class Http {
             },
         }, originalError)
 
-        if (this.apiInstance) {
-            this.apiInstance.setLastException(exception)
+        const owner = api ?? this.apiInstance
+
+        if (owner) {
+            owner.setLastException(exception)
         }
 
         return exception

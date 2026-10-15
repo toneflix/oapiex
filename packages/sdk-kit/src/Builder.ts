@@ -1,11 +1,20 @@
 import './utilities/global'
 
-import { Environment } from './Contracts/Core'
+import { Environment, UserConfig } from './Contracts/Core'
+
 import { XGenericObject } from './Contracts/Interfaces'
 import { buildUrl } from './utilities/helpers'
 import crypto from 'crypto'
 import { getConfig } from './utilities/Manager'
 
+/**
+ * Builds request URLs.
+ *
+ * The static methods resolve against the process-wide config. 
+ * An instance (`new Builder(() => config)`, which every `Core` exposes as
+ * `core.builder`) resolves against one client's config instead, so two SDKs in
+ * the same process keep their own base URL and environment.
+ */
 export class Builder {
     private static baseUrls = {
         live: '',
@@ -17,7 +26,16 @@ export class Builder {
      */
     static environment?: Environment
 
-    constructor() { }
+    /**
+     * Environment override for this instance, set with `setEnvironment`.
+     */
+    environment?: Environment
+
+    /**
+     * @param resolveConfig Supplies the config this instance builds against.
+     *   Omit it to build against the process-wide config.
+     */
+    constructor(private readonly resolveConfig?: () => UserConfig) { }
 
     /**
      * Sets the environment for the builder
@@ -34,8 +52,17 @@ export class Builder {
      * @returns 
      */
     static baseUrl() {
-        const config = getConfig()
-        const env = this.environment
+        return Builder.resolveBaseUrl(getConfig(), this.environment)
+    }
+
+    /**
+     * Resolve the base URL for a config, preferring an explicit environment.
+     *
+     * @param config
+     * @param environment
+     */
+    static resolveBaseUrl(config: UserConfig, environment?: Environment) {
+        const env = environment
             ?? config.environment
             ?? this.normalizeEnvironment(process.env.ENVIRONMENT)
             ?? 'sandbox'
@@ -46,6 +73,108 @@ export class Builder {
         }
 
         return this.normalizeBaseUrl(this.baseUrls[env])
+    }
+
+    /**
+     * The config this instance builds against.
+     */
+    config(): UserConfig {
+        return this.resolveConfig?.() ?? getConfig()
+    }
+
+    /**
+     * Sets the environment for this instance only.
+     *
+     * @param env
+     */
+    setEnvironment(env: Environment) {
+        this.environment = env
+    }
+
+    /**
+     * Gets this instance's base url.
+     */
+    baseUrl() {
+        return Builder.resolveBaseUrl(
+            this.config(),
+            this.environment ?? (this.resolveConfig ? undefined : Builder.environment)
+        )
+    }
+
+    /**
+     * Builds a full url against this instance's base url.
+     *
+     * @param endpoint
+     */
+    buildUrl(...endpoint: string[]) {
+        return buildUrl(this.baseUrl(), ...endpoint)
+    }
+
+    /**
+     * Builds the target url against this instance's base url.
+     *
+     * @param path
+     * @param params
+     * @param queryParams
+     */
+    buildTargetUrl(path: string, params: XGenericObject = {}, queryParams: XGenericObject = {}) {
+        const url = this.buildUrl(path)
+        const withPath = Builder.assignParamsToUrl(url, params, 'path')
+
+        return Builder.assignParamsToUrl(withPath, queryParams, 'query')
+    }
+
+    /**
+     * @see Builder.buildParams
+     * 
+     * @param params 
+     * @param type 
+     * @returns 
+     */
+    buildParams(params: XGenericObject, type: 'query' | 'path' = 'path') {
+        return Builder.buildParams(params, type)
+    }
+
+    /**
+     * @see Builder.assignParamsToUrl
+     * 
+     * @param url 
+     * @param params 
+     * @param type 
+     * @returns 
+     */
+    assignParamsToUrl(url: string, params: XGenericObject, type: 'query' | 'path' = 'path') {
+        return Builder.assignParamsToUrl(url, params, type)
+    }
+
+    /**
+     * Encrypts details with this instance's encryption key.
+     *
+     * @see Builder.encryptDetails
+     * 
+     * @param input 
+     * @param keysToEncrypt 
+     * @param outputMapping 
+     * @returns 
+     */
+    encryptDetails<X extends XGenericObject>(
+        input: Partial<X>,
+        keysToEncrypt: (keyof X)[] = [],
+        outputMapping: Partial<Record<keyof X, string>> = {}
+    ): Promise<X> {
+        return Builder.encryptDetailsWith(this.config().encryptionKey, input, keysToEncrypt, outputMapping)
+    }
+
+    /**
+     * @see Builder.encryptAES
+     * 
+     * @param data 
+     * @param token 
+     * @param nonce 
+     * @returns 
+     */
+    encryptAES(data: string, token: string, nonce: string): Promise<string> {
+        return Builder.encryptAES(data, token, nonce)
     }
 
     /**
@@ -149,7 +278,16 @@ export class Builder {
         keysToEncrypt: (keyof X)[] = [],
         outputMapping: Partial<Record<keyof X, string>> = {}
     ): Promise<X> {
-        const encryptionKey = getConfig().encryptionKey ?? process.env.ENCRYPTION_KEY
+        return this.encryptDetailsWith(getConfig().encryptionKey, input, keysToEncrypt, outputMapping)
+    }
+
+    private static async encryptDetailsWith<X extends XGenericObject>(
+        configuredKey: string | undefined,
+        input: Partial<X>,
+        keysToEncrypt: (keyof X)[] = [],
+        outputMapping: Partial<Record<keyof X, string>> = {}
+    ): Promise<X> {
+        const encryptionKey = configuredKey ?? process.env.ENCRYPTION_KEY
 
         if (!encryptionKey) {
             throw new Error('Encryption key is required to encrypt details')

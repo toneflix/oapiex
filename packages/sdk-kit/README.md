@@ -30,13 +30,13 @@ pnpm add @oapiex/sdk-kit
 ### Class-based SDK
 
 ```ts
-import { BaseApi, Core, Http } from '@oapiex/sdk-kit';
+import { BaseApi, Core } from '@oapiex/sdk-kit';
 
 class ExampleApi extends BaseApi {
   async list() {
     await this.core.validateAccess();
 
-    const { data } = await Http.send(
+    const { data } = await this.core.http.send(
       this.core.builder.buildTargetUrl('/v1/examples', {}, {}),
       'GET',
       {},

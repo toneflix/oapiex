@@ -3,7 +3,6 @@ import { loadUserConfig, resetConfig, setConfigFileBasename } from '../src/utili
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 
 import { Core } from '../src/Core'
-import { Http } from '../src/Http'
 import { createSdk } from '../src/RuntimeSdk'
 import os from 'node:os'
 import path from 'node:path'
@@ -24,7 +23,8 @@ describe('RuntimeSdk', () => {
             },
         })
         const validator = vi.fn(async () => true)
-        const sendSpy = vi.spyOn(Http, 'send')
+        // Runtime APIs send through the client's own scoped HTTP.
+        const sendSpy = vi.spyOn(core.http, 'send')
             .mockResolvedValueOnce({
                 success: true,
                 message: 'ok',
@@ -106,13 +106,6 @@ describe('RuntimeSdk', () => {
     })
 
     it('creates a runtime SDK from init options and a manifest bundle', async () => {
-        const sendSpy = vi.spyOn(Http, 'send').mockResolvedValue({
-            success: true,
-            message: 'ok',
-            data: [{ id: 'ex_1' }],
-            meta: {},
-        })
-
         const core = createSdk({
             document: {},
             manifest: {
@@ -151,6 +144,12 @@ describe('RuntimeSdk', () => {
         })
 
         core.setAccessValidator(async () => true)
+        const sendSpy = vi.spyOn(core.http, 'send').mockResolvedValue({
+            success: true,
+            message: 'ok',
+            data: [{ id: 'ex_1' }],
+            meta: {},
+        })
 
         await expect(core.api.examples.list({ code: 'NG' })).resolves.toEqual([{ id: 'ex_1' }])
         expect(sendSpy).toHaveBeenCalledTimes(1)

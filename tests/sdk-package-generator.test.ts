@@ -515,7 +515,8 @@ describe('SdkPackageGenerator', () => {
         expect(files['src/Apis/ActiveCustomer.ts']).not.toContain('CustomerQuery')
         expect(files['src/Apis/ActiveCustomer.ts']).toContain('export class ActiveCustomer')
         expect(files['src/Apis/ActiveCustomer.ts']).toContain('async create (params: ActiveParams, body: ActiveInput): Promise<Active>')
-        expect(files['src/Apis/ActiveCustomer.ts']).toContain('const { data } = await Http.send<Active>(')
+        expect(files['src/Apis/ActiveCustomer.ts']).toContain('const { data } = await this.core.http.send<Active>(')
+        expect(files['src/Apis/ActiveCustomer.ts']).not.toContain("import { Http } from '@oapiex/sdk-kit'")
         expect(files['src/index.ts']).toContain('export { ActiveCustomer as ActiveCustomerApi } from \'./Apis/ActiveCustomer\'')
     })
 

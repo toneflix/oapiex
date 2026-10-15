@@ -119,7 +119,6 @@ export class SdkPackageGenerator {
 
         const imports = [
             "import { BaseApi } from '../BaseApi'",
-            "import { Http } from '@oapiex/sdk-kit'",
         ]
 
         if (typeImportContext.specifiers.length > 0) {
@@ -168,7 +167,9 @@ export class SdkPackageGenerator {
             `    async ${operation.methodName} ${signature}: Promise<${this.rewriteTypeReference(operation.responseType, aliasMap)}> {`,
             '        await this.core.validateAccess()',
             '',
-            `        const { data } = await Http.send<${this.rewriteTypeReference(operation.responseType, aliasMap)}>(`,
+            // Send through the client's own scoped HTTP so several generated SDKs
+            // can share a process without sharing base URLs or credentials.
+            `        const { data } = await this.core.http.send<${this.rewriteTypeReference(operation.responseType, aliasMap)}>(`,
             `            this.core.builder.buildTargetUrl('${operation.path}', ${urlPathArgs}, ${urlQueryArgs}),`,
             `            '${operation.method}',`,
             `            ${bodyArg},`,

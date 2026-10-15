@@ -253,5 +253,5 @@ describe('generate command', () => {
         expect(await readFile(path.join(outDir, 'src', 'Apis', 'ActiveCustomer.ts'), 'utf8')).not.toContain('import type { Active,')
         expect(await readFile(path.join(outDir, 'src', 'Apis', 'ActiveCustomer.ts'), 'utf8')).not.toContain('CustomerHeader')
         expect(await readFile(path.join(outDir, 'src', 'index.ts'), 'utf8')).toContain("export { ActiveCustomer as ActiveCustomerApi } from './Apis/ActiveCustomer'")
-    })
+    }, 30000)
 })

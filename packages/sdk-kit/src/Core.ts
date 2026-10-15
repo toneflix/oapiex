@@ -5,9 +5,10 @@ import { InferRuntimeSdkApi, RuntimeSdkBundle } from './types'
 
 import { BaseApi } from './Apis/BaseApi'
 import { Builder } from './Builder'
-import { Http } from './Http'
+import { Http, ScopedHttp } from './Http'
 import { createRuntimeApi } from './RuntimeSdk'
 import { getConfig, updateConfig } from './utilities/Manager'
+import { mergeConfig } from './config'
 
 export class Core {
     static apiClass: typeof BaseApi = BaseApi
@@ -37,9 +38,25 @@ export class Core {
     api: BaseApi
 
     /**
-     * Builder Instance
+     * This client's config. Every request made through `builder` and `http`
+     * uses it, so several clients (several SDKs) can live in one process
+     * without overwriting each other's base URL, environment or auth.
      */
-    builder = Builder
+    private config: UserConfig = getConfig()
+
+    /**
+     * URL builder bound to this client's config.
+     */
+    builder: Builder = new Builder(() => this.config)
+
+    /**
+     * HTTP client bound to this client's config. Generated SDKs send through
+     * this; the static `Http.send` still uses the process-wide config.
+     */
+    http: ScopedHttp = Http.scoped({
+        config: () => this.config,
+        api: () => this.api,
+    })
 
     /**
      * Creates an instance of Core.
@@ -109,11 +126,16 @@ export class Core {
     }
 
     configure (config: Partial<UserConfig>): this {
-        const nextConfig = updateConfig(config)
+        // The client keeps its own copy; the process-wide config is still updated
+        // so code using the static `Http`/`Builder` behaves as it always has.
+        updateConfig(config)
+        const nextConfig = mergeConfig(this.config, config)
+
+        this.config = nextConfig
 
         if (nextConfig.environment) {
             this.environment = nextConfig.environment
-            this.builder.setEnvironment(nextConfig.environment)
+            Builder.setEnvironment(nextConfig.environment)
         }
 
         if ('clientId' in config) {
@@ -139,6 +161,7 @@ export class Core {
      */
     debug (level: DebugLevel = 0): this {
         this.debugLevel = level
+        this.config = { ...this.config, debugLevel: level }
 
         Http.setDebugLevel(level)
 
@@ -169,10 +192,10 @@ export class Core {
     }
 
     /**
-     * Get the current shared SDK config.
+     * Get this client's config.
      */
     getConfig (): UserConfig {
-        return getConfig()
+        return this.config
     }
 
     /**
@@ -187,6 +210,7 @@ export class Core {
      */
     clearAuth (): this {
         Http.clearAuth()
+        this.config = { ...this.config, auth: undefined }
 
         return this
     }
@@ -346,7 +370,7 @@ export class Core {
     }
 
     private hasConfiguredAuth (): boolean {
-        const auth = getConfig().auth
+        const auth = this.config.auth
 
         if (Array.isArray(auth)) {
             return auth.length > 0
