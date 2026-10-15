@@ -1,7 +1,7 @@
 {
   "name": "@oapiex/sdk-kit",
   "type": "module",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A TypeScript Base for building SDKs using OpenAPI specifications extracted by OAPIEX.",
   "private": false,
   "homepage": "https://toneflix.github.io/oapiex/reference/sdk-kit",
