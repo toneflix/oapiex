@@ -7,11 +7,18 @@ import { BaseApi } from './Apis/BaseApi'
 import { Builder } from './Builder'
 import { Http, ScopedHttp } from './Http'
 import { createRuntimeApi } from './RuntimeSdk'
-import { getConfig, updateConfig } from './utilities/Manager'
+import { getBaseConfig, mirrorConfig } from './utilities/Manager'
 import { mergeConfig } from './config'
 
 export class Core {
     static apiClass: typeof BaseApi = BaseApi
+
+    /**
+     * The config file basename this SDK reads (for example `maplerad.config`).
+     * Set it on a subclass so each SDK reads its own file, whatever other SDKs
+     * in the process set. When unset, the process-wide basename is used.
+     */
+    static configFile?: string
 
     debugLevel: DebugLevel = 0
 
@@ -42,7 +49,7 @@ export class Core {
      * uses it, so several clients (several SDKs) can live in one process
      * without overwriting each other's base URL, environment or auth.
      */
-    private config: UserConfig = getConfig()
+    private config: UserConfig = getBaseConfig((this.constructor as typeof Core).configFile)
 
     /**
      * URL builder bound to this client's config.
@@ -74,7 +81,9 @@ export class Core {
         env?: Environment,
         config?: Partial<UserConfig>
     ) {
-        const currentConfig = getConfig()
+        // Start from the kit defaults, this SDK's config file and explicit
+        // `updateConfig()` defaults, never from settings other clients wrote.
+        const currentConfig = this.config
         const resolvedConfig = clientId && typeof clientId === 'object'
             ? this.resolveInitOptionsFromObject(clientId, currentConfig)
             : this.resolveInitOptionsFromArgs(clientId, clientSecret, encryptionKey, env, config, currentConfig)
@@ -126,9 +135,14 @@ export class Core {
     }
 
     configure (config: Partial<UserConfig>): this {
-        // The client keeps its own copy; the process-wide config is still updated
-        // so code using the static `Http`/`Builder` behaves as it always has.
-        updateConfig(config)
+        // The client keeps its own copy; it is also mirrored into the process-wide
+        // config so code using the static `Http`/`Builder` behaves as it always
+        // has. New clients do not inherit the mirrored values.
+        // Only values the client actually set are mirrored, so a client without
+        // (say) auth never clears auth set through the static `Http` helpers.
+        mirrorConfig(Object.fromEntries(
+            Object.entries(config).filter(([, value]) => value !== undefined)
+        ) as Partial<UserConfig>)
         const nextConfig = mergeConfig(this.config, config)
 
         this.config = nextConfig

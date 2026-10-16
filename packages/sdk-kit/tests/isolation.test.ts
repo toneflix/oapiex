@@ -1,11 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import axios from 'axios'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 
 import { BaseApi } from '../src/Apis/BaseApi'
 import { Builder } from '../src/Builder'
 import { Core } from '../src/Core'
 import { Http } from '../src/Http'
-import { getConfig, resetConfig } from '../src/utilities/Manager'
+import { getConfig, resetConfig, setConfigFileBasename, updateConfig } from '../src/utilities/Manager'
 
 type Captured = {
     baseURL?: string
@@ -147,5 +150,71 @@ describe('multiple clients in one process', () => {
 
         expect(captured[0].url).toBe('https://api.maplerad.test/legacy')
         expect(header(captured[0].headers, 'Authorization')).toBe('Bearer maplerad-secret')
+    })
+
+    it('does not hand an earlier client\'s settings to a client created later', () => {
+        new Core({
+            environment: 'sandbox',
+            urls: { sandbox: 'https://first.proxy.test' },
+            auth: { type: 'bearer', token: 'first-token' },
+            headers: { 'x-first': '1' },
+            timeout: 1234,
+            debugLevel: 3,
+        })
+
+        const later = new Core({ clientSecret: 'later-secret', environment: 'sandbox' })
+
+        expect(later.builder.baseUrl()).not.toBe('https://first.proxy.test/')
+        expect(later.getConfig().auth).toBeUndefined()
+        expect(later.getConfig().headers).not.toHaveProperty('x-first')
+        expect(later.getConfig().timeout).toBeUndefined()
+        expect(later.getConfig().debugLevel).toBe(0)
+    })
+
+    it('still passes explicit updateConfig() defaults on to new clients', () => {
+        updateConfig({ timeout: 4321, headers: { 'x-app': 'roseed' } })
+
+        const client = new Core({ clientSecret: 'secret', environment: 'sandbox' })
+
+        expect(client.getConfig().timeout).toBe(4321)
+        expect(client.getConfig().headers).toMatchObject({ 'x-app': 'roseed' })
+    })
+
+    it('keeps static Http auth on the static path', () => {
+        Http.setAuth({ type: 'bearer', token: 'static-token' })
+
+        const client = new Core({ clientSecret: 'secret', environment: 'sandbox' })
+
+        expect(getConfig().auth).toEqual({ type: 'bearer', token: 'static-token' })
+        expect(client.getConfig().auth).toBeUndefined()
+    })
+
+    it('reads each SDK\'s own config file, whatever basename was set process-wide', async () => {
+        const dir = await mkdtemp(path.join(os.tmpdir(), 'sdk-kit-config-files-'))
+        await writeFile(path.join(dir, 'alpha.config.cjs'), 'module.exports = { urls: { sandbox: "https://alpha.test" }, timeout: 111 }')
+        await writeFile(path.join(dir, 'beta.config.cjs'), 'module.exports = { urls: { sandbox: "https://beta.test" }, timeout: 222 }')
+        vi.spyOn(process, 'cwd').mockReturnValue(dir)
+
+        class AlphaCore extends Core {
+            static override configFile = 'alpha.config'
+        }
+        class BetaCore extends Core {
+            static override configFile = 'beta.config'
+        }
+
+        try {
+            // Whichever SDK set the process-wide basename last no longer matters.
+            setConfigFileBasename('beta.config')
+            const alpha = new AlphaCore({ clientSecret: 'a', environment: 'sandbox' })
+            setConfigFileBasename('alpha.config')
+            const beta = new BetaCore({ clientSecret: 'b', environment: 'sandbox' })
+
+            expect(alpha.builder.baseUrl()).toBe('https://alpha.test/')
+            expect(alpha.getConfig().timeout).toBe(111)
+            expect(beta.builder.baseUrl()).toBe('https://beta.test/')
+            expect(beta.getConfig().timeout).toBe(222)
+        } finally {
+            await rm(dir, { recursive: true, force: true })
+        }
     })
 })
